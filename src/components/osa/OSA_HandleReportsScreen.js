@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, Image, StyleSheet, TouchableOpacity, Modal, TextInput } from 'react-native';
+import { View, Text, ScrollView, Image, StyleSheet, TouchableOpacity, Modal, TextInput, Alert } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import firebase from 'firebase/compat/app';
 import 'firebase/firestore';
@@ -9,9 +9,9 @@ const OSA_HandleReportsScreen = ({ route }) => {
   const { reportData } = route.params;
   const [foundItems, setFoundItems] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [message, setMessage] = useState('');
-  const [status, setStatus] = useState('pending');
+  const [respondModalVisible, setRespondModalVisible] = useState(false);
+  const [osaMessage, setOSAMessage] = useState('');
+  const [status, setStatus] = useState('Pending');
 
   useEffect(() => {
     const fetchFoundItems = async () => {
@@ -29,8 +29,53 @@ const OSA_HandleReportsScreen = ({ route }) => {
     fetchFoundItems();
   }, [reportData.imageUrl]);
 
-  const handleSendFeedback = () => {
-    console.log("Send Feedback Button Clicked!");
+  const resetFields = () => {
+    setStatus('pending');
+    setOSAMessage('');
+  };
+
+  const handleSendFeedback = async () => {
+    try {
+      const user = firebase.auth().currentUser;
+      if (user) {
+        // Retrieve OSA information
+        const osaDocRef = firebase.firestore().collection('osa').doc(user.uid);
+        const osaDocSnapshot = await osaDocRef.get();
+        if (osaDocSnapshot.exists) {
+          const osaData = osaDocSnapshot.data();
+          const feedbackData = {
+            reportId: reportData.reportId,
+            status,
+            osaMessage,
+            feedbackTimestamp: firebase.firestore.FieldValue.serverTimestamp(),
+            osaFullName: `${osaData.firstName} ${osaData.lastName}`,
+            osaJobPosition: osaData.jobPosition,
+            imageUrl: reportData.imageUrl,
+          };
+          // Store feedback under 'osa-feedback' collection with OSA's UID as document ID
+          await firebase.firestore().collection('osa-feedback').doc(user.uid).collection('feedback').add(feedbackData);
+
+          // Update status in 'student-reports' collection
+          await firebase.firestore().collection('student-report').doc(reportData.studentUID).collection('reports').doc(reportData.reportId).update({ status });
+
+          // Update status and osaMessage in 'student-reports' collection
+          await firebase.firestore().collection('student-report').doc(reportData.studentUID).collection('reports').doc(reportData.reportId).update({ status, osaMessage });
+
+          // Display success message
+          Alert.alert('Success', 'Feedback sent successfully!');
+
+          // Reset fields and close modal
+          resetFields();
+          setRespondModalVisible(false);
+        } else {
+          console.error("OSA document does not exist");
+        }
+      } else {
+        console.error("User not authenticated");
+      }
+    } catch (error) {
+      console.error("Error sending feedback:", error);
+    }
   };
 
   return (
@@ -47,6 +92,7 @@ const OSA_HandleReportsScreen = ({ route }) => {
         <Text style={[styles.text, styles.headerText]}>Report Information:</Text>
       </View>
       <View style={styles.reportInfo}>
+        <Text style={styles.text}>Student UID: {reportData.studentUID}</Text>
         <Text style={styles.text}>Student Name: {reportData.studentName} ({reportData.studentNo})</Text>
         <Text style={styles.text}>Program/Year Level: {reportData.program}, {reportData.yearLevel} Year</Text>
         <Text style={styles.text}>Category: {reportData.category}</Text>
@@ -54,7 +100,7 @@ const OSA_HandleReportsScreen = ({ route }) => {
         <Text style={styles.text}>Description: {reportData.description}</Text>
         <Text style={styles.text}>Date Found: {reportData.dateFound?.toDate()?.toLocaleDateString()}</Text>
         <Text style={styles.text}>Location: {reportData.locationType} - {reportData.location}</Text>
-        <Text style={styles.text}>Message: {reportData.message}</Text>
+        <Text style={styles.text}>Message: {reportData.studentMessage}</Text>
       </View>
 
       {/* Render found items */}
@@ -79,45 +125,45 @@ const OSA_HandleReportsScreen = ({ route }) => {
       )}
 
       {/* Respond Button */}
-      <TouchableOpacity style={styles.respondButton} onPress={() => setModalVisible(true)}>
+      <TouchableOpacity style={styles.respondButton} onPress={() => setRespondModalVisible(true)}>
         <Text style={styles.respondButtonText}>Respond</Text>
       </TouchableOpacity>
 
       {/* Modal for Respond */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={modalVisible}
-        onRequestClose={() => {
-          setModalVisible(!modalVisible);
-        }}
-      >
-        <View style={styles.modalView}>
-          <Text style={styles.modalText}>Message:</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter your message..."
-            onChangeText={setMessage}
-            value={message}
-            multiline={true}
-          />
-          {/* Change Status */}
-          <Text style={styles.modalText}>Change Status:</Text>
-          <View style={styles.pickerContainer}>
-          <Picker
-            selectedValue={status}
-            style={styles.picker}
-            onValueChange={(itemValue, itemIndex) => setStatus(itemValue)}
-            dropdownIconColor="gray"
-          >
-            <Picker.Item label="Pending" value="pending" />
-            <Picker.Item label="Accepted" value="accepted" />
-            <Picker.Item label="Rejected" value="rejected" />
-          </Picker>
+      <Modal animationType="slide" transparent={true} visible={respondModalVisible} onRequestClose={() => setRespondModalVisible(false)}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalHeaderText}>Report Feedback Form </Text>
+              <TouchableOpacity onPress={() => {
+                  setRespondModalVisible(false);
+                  resetFields();
+              }}>
+                  <Text style={styles.closeButton}>X</Text>
+              </TouchableOpacity>
+            </View>
+            {/* Change Status */}
+            <Text style={styles.modalText}>Change Status:</Text>
+            <View style={styles.pickerContainer}>
+              <Picker
+                selectedValue={status}
+                style={styles.picker}
+                onValueChange={(itemValue, itemIndex) => setStatus(itemValue)}
+                dropdownIconColor="gray"
+              >
+                <Picker.Item label="Pending" value="Pending" />
+                <Picker.Item label="Accepted" value="Accepted" />
+                <Picker.Item label="Rejected" value="Rejected" />
+              </Picker>
+            </View>
+            {/* My Message */}
+            <Text style={styles.modalText}>My Message:</Text>
+            <TextInput style={styles.input} placeholder="Enter your message..." onChangeText={setOSAMessage} value={osaMessage} multiline={true} />
+            {/* Send Feedback Button */}
+            <TouchableOpacity style={styles.sendFeedbackButton} onPress={handleSendFeedback}>
+              <Text style={styles.sendFeedbackButtonText}>Send Feedback</Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity style={styles.sendFeedbackButton} onPress={handleSendFeedback}>
-            <Text style={styles.sendFeedbackButtonText}>Send Feedback</Text>
-          </TouchableOpacity>
         </View>
       </Modal>
     </ScrollView>
@@ -129,6 +175,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingHorizontal: 10,
     backgroundColor: 'white',
+    paddingTop: 10,
   },
   image: {
     width: 100,
@@ -173,41 +220,54 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   respondButton: {
-    backgroundColor: 'blue',
+    backgroundColor: 'yellow',
     padding: 10,
     borderRadius: 5,
     alignItems: 'center',
     marginBottom: 20,
   },
   respondButtonText: {
-    color: 'white',
+    color: 'black',
     fontWeight: 'bold',
   },
-  modalView: {
-    margin: 20,
-    backgroundColor: 'white',
-    borderRadius: 20,
-    padding: 35,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
-   modalText: {
+  modalContent: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 10,
+    width: '90%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  modalHeaderText: {
+    color: 'black',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  closeButton: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: 'red',
+  },
+  modalText: {
     color: 'black',
     marginBottom: 5,
   },
   input: {
-    width: '100%',
-    borderColor: 'gray',
     borderWidth: 1,
-    marginBottom: 10,
-    padding: 10,
+    borderColor: '#CCCCCC',
     borderRadius: 5,
+    padding: 8,
+    marginBottom: 10,
+    color: 'black',
   },
   pickerContainer: {
     backgroundColor: 'white',
@@ -221,14 +281,14 @@ const styles = StyleSheet.create({
     color: 'black', // Set picker text color
   },
   sendFeedbackButton: {
-    backgroundColor: 'blue',
+    backgroundColor: 'yellow',
     padding: 10,
     borderRadius: 5,
     alignItems: 'center',
     marginTop: 10,
   },
   sendFeedbackButtonText: {
-    color: 'white',
+    color: 'black',
     fontWeight: 'bold',
   },
 });

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, Image, FlatList,
-  Alert, Modal, Button, StyleSheet, Platform
+  Alert, Modal, Button, StyleSheet, Platform, RefreshControl,
+  ScrollView
 } from 'react-native';
 import firebase from 'firebase/compat/app';
 import 'firebase/firestore';
@@ -9,8 +10,10 @@ import 'firebase/storage';
 
 const ST_MyReportsScreen = () => {
   const [reports, setReports] = useState([]);
+  const [filteredReports, setFilteredReports] = useState([]); // State for filtered reports
+  const [statusFilter, setStatusFilter] = useState('All'); // State for status filter
   const [isLoading, setIsLoading] = useState(true); // Add a loading state
-
+  const [refreshing, setRefreshing] = useState(false); // Add a refreshing state
   const [viewReportModalVisible, setViewReportModalVisible] = useState(false);
   const [category, setCategory] = useState('');
   const [brand, setBrand] = useState('');
@@ -20,46 +23,65 @@ const ST_MyReportsScreen = () => {
   const [locationType, setLocationType] = useState('');
   const [roomNumber, setRoomNumber] = useState('');
   const [facilityLocation, setFacilityLocation] = useState('');
-  const [message, setMessage] = useState('');
+  const [studentMessage, setStudentMessage] = useState('');
+  const [osaMessage, setOSAMessage] = useState('');
 
   const resetFields = () => {
     setCategory(''); setLocationType(''); setRoomNumber('');
     setDescription(''); setBrand(''); setDateFound(new Date());
-    setFacilityLocation(''); setMessage('');
+    setFacilityLocation(''); setStudentMessage('');
   };
 
   useEffect(() => {
-    const fetchReports = async () => {
-      const user = firebase.auth().currentUser;
-      if (user) {
-        try {
-          const unsubscribe = firebase.firestore().collection('student-reports').doc(user.uid).collection('reports')
-            .onSnapshot((snapshot) => {
-              setIsLoading(false); // Set loading to false after data arrives
-              const reportData = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-              // Sort the reports by the date reported in descending order
-              reportData.sort((a, b) => {
-                const dateA = a.submissionTimestamp?.toDate();
-                const dateB = b.submissionTimestamp?.toDate();
-                if (dateA && dateB) {
-                  return dateB - dateA;
-                }
-                // Handle cases where one or both dates are null (optional)
-                return 0; // Or any other default sorting behavior
-              });
-              setReports(reportData);
-            });
-
-          return () => unsubscribe();
-        } catch (error) {
-          setIsLoading(false); // Set loading to false on error
-          console.error('Error fetching reports:', error);
-        }
-      }
-    };
-
     fetchReports();
   }, []);
+
+  const fetchReports = async () => {
+    const user = firebase.auth().currentUser;
+    if (user) {
+      try {
+        const unsubscribe = firebase.firestore().collection('student-report').doc(user.uid).collection('reports')
+          .onSnapshot((snapshot) => {
+            setIsLoading(false);
+            const reportData = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+            reportData.sort((a, b) => {
+              const dateA = a.submissionTimestamp?.toDate();
+              const dateB = b.submissionTimestamp?.toDate();
+              if (dateA && dateB) {
+                return dateB - dateA;
+              }
+              return 0;
+            });
+            setReports(reportData);
+            applyFilter(reportData, statusFilter); // Apply filter initially
+          });
+
+        return () => unsubscribe();
+      } catch (error) {
+        setIsLoading(false);
+        console.error('Error fetching reports:', error);
+      }
+    }
+  };
+
+  const applyFilter = (data, status) => {
+    let filteredData = data;
+    if (status !== 'All') {
+      filteredData = data.filter((item) => item.status === status);
+    }
+    setFilteredReports(filteredData);
+  };
+
+  const changeFilter = (status) => {
+    setStatusFilter(status); // Set status filter
+    applyFilter(reports, status); // Apply filter
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true); // Set refreshing state to true
+    fetchReports(); // Fetch reports again
+    setRefreshing(false); // Set refreshing state to false after fetching is done
+  };
 
   const renderItem = ({ item }) => (
     <TouchableOpacity style={styles.reportItemContainer} onPress={() => handleViewReport(item)}>
@@ -67,7 +89,7 @@ const ST_MyReportsScreen = () => {
       <View style={styles.reportItemDetails}>
         <Text style={styles.reportItemId}>Report ID: {item.id}</Text>
         <Text style={styles.reportItemText}>Date Reported: {item.submissionTimestamp?.toDate()?.toLocaleDateString()}</Text>
-        <Text style={styles.reportItemText}>Status: Pending</Text>
+        <Text style={styles.reportItemText}>Status: {item.status}</Text>
       </View>
       <Text style={styles.viewButtonText}>VIEW</Text>
     </TouchableOpacity>
@@ -85,18 +107,49 @@ const ST_MyReportsScreen = () => {
         } else if (report.locationType === 'facility') {
           setFacilityLocation(report.location); // Set facility location if location type is facility
         }
-    setMessage(report.message);
+    setStudentMessage(report.studentMessage);
+    setOSAMessage(report.osaMessage); // Set OSA message
     setViewReportModalVisible(true);
   };
 
   return (
     <View style={styles.container}>
 
+      {/* Top Navigation Bar */}
+      <View style={styles.navbar}>
+        <TouchableOpacity
+          style={[styles.filterButton, statusFilter === 'All' && styles.activeFilter]}
+          onPress={() => changeFilter('All')}
+        >
+          <Text style={styles.filterButtonText}>All</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.filterButton, statusFilter === 'Pending' && styles.activeFilter]}
+          onPress={() => changeFilter('Pending')}
+        >
+          <Text style={styles.filterButtonText}>Pending</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.filterButton, statusFilter === 'Accepted' && styles.activeFilter]}
+          onPress={() => changeFilter('Accepted')}
+        >
+          <Text style={styles.filterButtonText}>Accepted</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.filterButton, statusFilter === 'Rejected' && styles.activeFilter]}
+          onPress={() => changeFilter('Rejected')}
+        >
+          <Text style={styles.filterButtonText}>Rejected</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Report List */}
       <FlatList
-        data={reports}
+        data={filteredReports}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ paddingRight: 4 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       />
 
       <Modal animationType="slide" transparent={true} visible={viewReportModalVisible} onRequestClose={() => setViewReportModalVisible(false)}>
@@ -112,37 +165,71 @@ const ST_MyReportsScreen = () => {
                 </TouchableOpacity>
               </View>
               {/* Item Category */}
-              <Text style={styles.modalText}>Category:</Text>
+              <View style={styles.inputContainer}>
+                <Image source={require('../../assets/label_ui/category_ui.png')} style={styles.icon} />
+                <Text style={styles.modalText}>Category:</Text>
+              </View>
               <Text style={styles.input}>{category}</Text>
               {/* Item Brand */}
-              <Text style={styles.modalText}>Brand:</Text>
+              <View style={styles.inputContainer}>
+                <Image source={require('../../assets/label_ui/brand_ui.png')} style={styles.icon} />
+                <Text style={styles.modalText}>Brand:</Text>
+              </View>
               <Text style={styles.input}>{brand}</Text>
               {/* Item Description */}
-              <Text style={styles.modalText}>Description:</Text>
+              <View style={styles.inputContainer}>
+                <Image source={require('../../assets/label_ui/description_ui.png')} style={styles.icon} />
+                <Text style={styles.modalText}>Description: </Text>
+              </View>
               <Text style={styles.input}>{description}</Text>
               {/* Date Found */}
-              <Text style={styles.modalText}>Date Found:</Text>
+              <View style={styles.inputContainer}>
+                <Image source={require('../../assets/label_ui/date_found_ui.png')} style={styles.icon} />
+                <Text style={styles.modalText}>Date Found:</Text>
+              </View>
               <Text style={styles.input}>{dateFound.toLocaleDateString()}</Text>
               {/* Location Type */}
-              <Text style={styles.modalText}>Location:</Text>
+              <View style={styles.inputContainer}>
+                <Image source={require('../../assets/label_ui/location_ui.png')} style={styles.icon} />
+                <Text style={styles.modalText}>Location:</Text>
+              </View>
               <Text style={styles.input}>{locationType}</Text>
               {/* Room Number (If Location is Room) */}
               {locationType === 'room' && (
                 <View>
-                  <Text style={styles.modalText}>Room Number:</Text>
+                  <View style={styles.inputContainer}>
+                    <Image source={require('../../assets/label_ui/room_number_ui.png')} style={styles.icon} />
+                    <Text style={styles.modalText}>Room Number:</Text>
+                  </View>
                   <Text style={styles.input}>{roomNumber}</Text>
                 </View>
               )}
               {/* Facility Location (If Location is Facility) */}
               {locationType === 'facility' && (
                 <View>
-                  <Text style={styles.modalText}>Facility Location:</Text>
+                  <View style={styles.inputContainer}>
+                    <Image source={require('../../assets/label_ui/facility_location_ui.png')} style={styles.icon} />
+                    <Text style={styles.modalText}>Facility Location:</Text>
+                  </View>
                   <Text style={styles.input}>{facilityLocation}</Text>
                 </View>
               )}
-              {/* Message Field */}
-              <Text style={styles.modalText}>Message:</Text>
-              <Text style={styles.input}>{message}</Text>
+              {/* Student Message Field */}
+              <View style={styles.inputContainer}>
+                <Image source={require('../../assets/label_ui/message_ui.png')} style={styles.icon} />
+                <Text style={styles.modalText}>My Message: </Text>
+              </View>
+              <Text style={styles.input}>{studentMessage}</Text>
+              {/* OSA Message Field */}
+              {osaMessage && ( // Check if osaMessage exists
+                <View>
+                  <View style={styles.inputContainer}>
+                    <Image source={require('../../assets/label_ui/message_ui.png')} style={styles.icon} />
+                    <Text style={styles.modalText}>OSA Message: </Text>
+                  </View>
+                  <Text style={styles.input}>{osaMessage}</Text>
+                </View>
+              )}
             </View>
         </View>
       </Modal>
@@ -154,13 +241,33 @@ const ST_MyReportsScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'gray',
-    padding: 10,
+    backgroundColor: '#fff8dc',
+    paddingBottom: 10,
+  },
+  navbar: {
+    flexDirection: 'row',
+    justifyContent: 'space-evenly',
+    backgroundColor: '#ffde1a',
+    marginBottom: 10,
+  },
+  filterButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 28,
+    borderRadius: 8,
+  },
+  activeFilter: {
+    borderBottomWidth: 4, // Add border bottom style
+    borderBottomColor: '#ffa500', // Change border bottom color for active filter
+  },
+  filterButtonText: {
+    fontWeight: 'bold',
+    color: 'black',
   },
   reportItemContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 10,
+    marginHorizontal: 10,
     padding: 10,
     backgroundColor: '#f0f0f0',
     borderRadius: 8,
@@ -214,6 +321,16 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: 'red',
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  icon: {
+    width: 16,
+    height: 16,
+    marginRight: 10,
   },
   modalText: {
     color: 'black',

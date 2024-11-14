@@ -40,14 +40,36 @@ const OSA_ManageFoundItemsScreen = () => {
   const fetchImages = async () => {
     const db = firebase.firestore();
     try {
-      const snapshot = await db.collection('found-items').orderBy('publishedDateTime', 'desc').get();
-      const imageUrls = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      setImages(imageUrls);
-      setFilteredImages(imageUrls); // Set filteredImages to the same initial value as images
+        // Fetch all found items
+        const snapshot = await db.collection('found-items').orderBy('publishedDateTime', 'desc').get();
+        const allImages = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+
+        // Fetch feedback from OSA
+        const user = firebase.auth().currentUser;
+        if (user) {
+            const feedbackSnapshot = await db.collection('osa-feedback').doc(user.uid).collection('feedback').get();
+            const feedbackData = feedbackSnapshot.docs.map((doc) => doc.data());
+
+            // Filter out images based on OSA feedback
+            const filteredImages = allImages.filter((item) => {
+                for (const feedback of feedbackData) {
+                    // Check if the item URL matches any reported URLs and the feedback status is "Accepted"
+                    if (feedback.imageUrl === item.imageUrl && feedback.status === 'Accepted') {
+                        return false; // Exclude the image
+                    }
+                }
+                return true; // Include the image
+            });
+
+            setImages(filteredImages);
+            setFilteredImages(filteredImages);
+        } else {
+            console.error("User not authenticated");
+        }
     } catch (error) {
-      console.error('Error fetching images:', error);
+        console.error('Error fetching images:', error);
     }
-  };
+};
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -354,7 +376,7 @@ const OSA_ManageFoundItemsScreen = () => {
       <View style={styles.header}>
         <TextInput style={styles.searchInput} placeholder="Search..." onChangeText={handleSearch} maxLength={200}/>
         <TouchableOpacity style={styles.addButton} onPress={() => setAddModalVisible(true)}>
-          <Text style={styles.addButtonText}>+ Add Item</Text>
+          <Text style={styles.addButtonText}>+ Add</Text>
         </TouchableOpacity>
       </View>
 
@@ -384,34 +406,49 @@ const OSA_ManageFoundItemsScreen = () => {
               </TouchableOpacity>
             </View>
             {/* Item Category */}
-            <Text style={styles.modalText}>Category:</Text>
+            <View style={styles.inputContainer}>
+              <Image source={require('../../assets/label_ui/category_ui.png')} style={styles.icon} />
+              <Text style={styles.modalText}>Category:</Text>
+            </View>
             <View style={styles.pickerContainer}>
               <Picker selectedValue={category} onValueChange={(itemValue) => setCategory(itemValue)} style={styles.picker} dropdownIconColor="gray">
                 <Picker.Item label="Select a Category" value="" />
                 <Picker.Item label="Electronics" value="Electronics" />
                 <Picker.Item label="School Supplies" value="School Supplies" />
-                <Picker.Item label="Garments / Clothing" value="Clothing and accessories" />
+                <Picker.Item label="Garments / Clothing" value="Garments / Clothing" />
                 <Picker.Item label="Personal Items" value="Personal Items" />
               </Picker>
             </View>
             {/* Item Brand */}
-            <Text style={styles.modalText}>Brand:</Text>
+            <View style={styles.inputContainer}>
+              <Image source={require('../../assets/label_ui/brand_ui.png')} style={styles.icon} />
+              <Text style={styles.modalText}>Brand:</Text>
+            </View>
             <TextInput style={styles.input} onChangeText={setBrand} value={brand} placeholder="If none, type NA" placeholderTextColor="gray" maxLength={50} />
             {/* Item Description */}
-            <Text style={styles.modalText}>Description: </Text>
+            <View style={styles.inputContainer}>
+              <Image source={require('../../assets/label_ui/description_ui.png')} style={styles.icon} />
+              <Text style={styles.modalText}>Description: </Text>
+            </View>
             <TextInput
               style={styles.input} onChangeText={setDescription} value={description}
               placeholder="Name, Color, Material, Size, Specifications, Contents etc."
               placeholderTextColor="gray" multiline={true} maxLength={200}
             />
             {/* Date Found */}
-            <Text style={styles.modalText}>Date Found:</Text>
+            <View style={styles.inputContainer}>
+              <Image source={require('../../assets/label_ui/date_found_ui.png')} style={styles.icon} />
+              <Text style={styles.modalText}>Date Found:</Text>
+            </View>
             <TouchableOpacity style={[styles.input, { color: 'black' }]} onPress={showDatepicker}>
               <Text style={{ color: 'black', fontSize: 14 }}>{datePicked ? dateFound.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : 'Select Date Found'}</Text>
             </TouchableOpacity>
             {showDatePicker && <DateTimePicker testID="dateTimePicker" value={dateFound} mode="date" is24Hour={true} display="default" onChange={onChangeDate} />}
             {/* Location Type */}
-            <Text style={styles.modalText}>Location:</Text>
+            <View style={styles.inputContainer}>
+               <Image source={require('../../assets/label_ui/location_ui.png')} style={styles.icon} />
+               <Text style={styles.modalText}>Location:</Text>
+            </View>
             <View style={styles.locationContainer}>
               <View style={styles.radioButton}>
                 <RadioButton value="room" status={locationType === 'room' ? 'checked' : 'unchecked'} onPress={() => setLocationType('room')} color="black" />
@@ -425,42 +462,57 @@ const OSA_ManageFoundItemsScreen = () => {
             {/* Room Number (If Location is Room) */}
             {locationType === 'room' && (
               <View>
-                <Text style={styles.modalText}>Room Number:</Text>
+                <View style={styles.inputContainer}>
+                  <Image source={require('../../assets/label_ui/room_number_ui.png')} style={styles.icon} />
+                  <Text style={styles.modalText}>Room Number:</Text>
+                </View>
                 <TextInput style={styles.input} onChangeText={setRoomNumber} value={roomNumber} placeholder="Enter room number" placeholderTextColor="gray" keyboardType="numeric" maxLength={4} />
               </View>
             )}
             {/* Facility Location (If Location is Facility) */}
             {locationType === 'facility' && (
               <View>
-                <Text style={styles.modalText}>Facility Location:</Text>
+                <View style={styles.inputContainer}>
+                  <Image source={require('../../assets/label_ui/facility_location_ui.png')} style={styles.icon} />
+                  <Text style={styles.modalText}>Facility Location:</Text>
+                </View>
                 <View style={styles.pickerContainer}>
                   <Picker selectedValue={facilityLocation} onValueChange={(itemValue) => setFacilityLocation(itemValue)} style={styles.picker} dropdownIconColor="black">
                     <Picker.Item label="Select a Facility Location" value="" />
-                    <Picker.Item label="Chapel" value="chapel" />
-                    <Picker.Item label="Lobby" value="lobby" />
-                    <Picker.Item label="Hallway" value="hallway" />
-                    <Picker.Item label="Congregating Area" value="congregatingArea" />
-                    <Picker.Item label="Garden" value="garden" />
-                    <Picker.Item label="Parking Lot" value="parkingLot" />
-                    <Picker.Item label="Comfort Room" value="comfortRoom" />
-                    <Picker.Item label="Canteen" value="canteen" />
-                    <Picker.Item label="Study Area" value="studyArea" />
-                    <Picker.Item label="Library" value="library" />
-                    <Picker.Item label="PE CENTER" value="peCenter" />
-                    <Picker.Item label="Seminar Room" value="seminarRoom" />
+                    <Picker.Item label="Chapel" value="Chapel" />
+                    <Picker.Item label="Lobby" value="Lobby" />
+                    <Picker.Item label="Hallway" value="Hallway" />
+                    <Picker.Item label="Congregating Area" value="Congregating Area" />
+                    <Picker.Item label="Garden" value="Garden" />
+                    <Picker.Item label="Parking Lot" value="Parking Lot" />
+                    <Picker.Item label="Comfort Room" value="Comfort Room" />
+                    <Picker.Item label="Canteen" value="Canteen" />
+                    <Picker.Item label="Study Area" value="Study Area" />
+                    <Picker.Item label="Library" value="Library" />
+                    <Picker.Item label="PE CENTER" value="PE CENTER" />
+                    <Picker.Item label="Seminar Room" value="Seminar Room" />
                   </Picker>
                 </View>
               </View>
             )}
             {/* Select Image */}
             <View style={styles.selectImageContainer}>
-              <Text style={styles.modalText}>Item Image</Text>
+              <View style={styles.inputContainer}>
+                <Image source={require('../../assets/label_ui/item_image_ui.png')} style={styles.icon} />
+                <Text style={styles.modalText}>Item Image</Text>
+              </View>
               <TouchableOpacity style={styles.selectImageButton} onPress={handleSelectImage}>
                 <Text style={styles.selectImageText}>{selectedImage ? selectedImage.fileName : 'Select Image...'}</Text>
               </TouchableOpacity>
             </View>
-            {/* Submit Button */}
-            <Button title="Add Item" onPress={handleAddItem} disabled={!isFormClickable()} />
+            {/* Add Item Button */}
+            <TouchableOpacity
+              style={[styles.addItemButton, { backgroundColor: isFormClickable() ? 'yellow' : 'lightgray' }]}
+              onPress={handleAddItem}
+              disabled={!isFormClickable()}
+            >
+              <Text style={{ alignItems:'center', color: isFormClickable() ? 'black' : 'gray', fontWeight: 'bold' }}>Add Item</Text>
+           </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -478,34 +530,49 @@ const OSA_ManageFoundItemsScreen = () => {
               </TouchableOpacity>
             </View>
             {/* Item Category */}
-            <Text style={styles.modalText}>Category:</Text>
+            <View style={styles.inputContainer}>
+              <Image source={require('../../assets/label_ui/category_ui.png')} style={styles.icon} />
+              <Text style={styles.modalText}>Category:</Text>
+            </View>
             <View style={styles.pickerContainer}>
               <Picker selectedValue={fetchCategory} onValueChange={(itemValue) => updateCategory(itemValue)} style={styles.picker} dropdownIconColor="gray">
                 <Picker.Item label="Select a Category" value="" />
                 <Picker.Item label="Electronics" value="Electronics" />
                 <Picker.Item label="School Supplies" value="School Supplies" />
-                <Picker.Item label="Garments / Clothing" value="Clothing and accessories" />
+                <Picker.Item label="Garments / Clothing" value="Garments / Clothing" />
                 <Picker.Item label="Personal Items" value="Personal Items" />
               </Picker>
             </View>
             {/* Item Brand */}
-            <Text style={styles.modalText}>Brand:</Text>
+            <View style={styles.inputContainer}>
+              <Image source={require('../../assets/label_ui/brand_ui.png')} style={styles.icon} />
+              <Text style={styles.modalText}>Brand:</Text>
+            </View>
             <TextInput style={styles.input} onChangeText={updateBrand} value={fetchBrand} placeholder="If none, type NA" placeholderTextColor="gray" maxLength={50} />
             {/* Item Description */}
-            <Text style={styles.modalText}>Description: </Text>
+            <View style={styles.inputContainer}>
+              <Image source={require('../../assets/label_ui/description_ui.png')} style={styles.icon} />
+              <Text style={styles.modalText}>Description: </Text>
+            </View>
             <TextInput
               style={styles.input} onChangeText={updateDescription} value={fetchDescription}
               placeholder="Name, Color, Material, Size, Specifications, Contents etc."
               placeholderTextColor="gray" multiline={true} maxLength={200}
             />
             {/* Date Found */}
-            <Text style={styles.modalText}>Date Found:</Text>
+            <View style={styles.inputContainer}>
+              <Image source={require('../../assets/label_ui/date_found_ui.png')} style={styles.icon} />
+              <Text style={styles.modalText}>Date Found:</Text>
+            </View>
             <TouchableOpacity style={[styles.input, { color: 'black' }]} onPress={showEditDatePicker}>
               <Text style={{ color: 'black', fontSize: 14 }}>{fetchDatePicked ? fetchDateFound.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : 'Select Date Found'}</Text>
             </TouchableOpacity>
             {showDatePicker && <DateTimePicker testID="dateTimePicker" value={fetchDateFound} mode="date" is24Hour={true} display="default" onChange={onChangeEditDate} />}
             {/* Location Type */}
-            <Text style={styles.modalText}>Location:</Text>
+            <View style={styles.inputContainer}>
+              <Image source={require('../../assets/label_ui/location_ui.png')} style={styles.icon} />
+              <Text style={styles.modalText}>Location:</Text>
+            </View>
             <View style={styles.locationContainer}>
               <View style={styles.radioButton}>
                 <RadioButton value="room" status={fetchLocationType === 'room' ? 'checked' : 'unchecked'} onPress={() => updateLocationType('room')} color="black" />
@@ -519,14 +586,20 @@ const OSA_ManageFoundItemsScreen = () => {
             {/* Room Number (If Location is Room) */}
             {fetchLocationType === 'room' && (
               <View>
-                <Text style={styles.modalText}>Room Number:</Text>
+                <View style={styles.inputContainer}>
+                  <Image source={require('../../assets/label_ui/room_number_ui.png')} style={styles.icon} />
+                  <Text style={styles.modalText}>Room Number:</Text>
+                </View>
                 <TextInput style={styles.input} onChangeText={updateRoomNumber} value={fetchRoomNumber} placeholder="Enter room number" placeholderTextColor="gray" keyboardType="numeric" maxLength={4} />
               </View>
             )}
             {/* Facility Location (If Location is Facility) */}
             {fetchLocationType === 'facility' && (
               <View>
-                <Text style={styles.modalText}>Facility Location:</Text>
+                <View style={styles.inputContainer}>
+                  <Image source={require('../../assets/label_ui/facility_location_ui.png')} style={styles.icon} />
+                  <Text style={styles.modalText}>Facility Location:</Text>
+                </View>
                 <View style={styles.pickerContainer}>
                   <Picker selectedValue={fetchFacilityLocation} onValueChange={(itemValue) => updateFacilityLocation(itemValue)} style={styles.picker} dropdownIconColor="black">
                     <Picker.Item label="Select a Facility Location" value="" />
@@ -546,8 +619,14 @@ const OSA_ManageFoundItemsScreen = () => {
                 </View>
               </View>
             )}
-            {/* Submit Button */}
-            <Button title="Update Item" onPress={handleUpdateItem} disabled={!fieldsChanged} />
+            {/* Update Button */}
+            <TouchableOpacity
+               style={styles.updateItemButton}
+               onPress={handleUpdateItem}
+               disabled={!fieldsChanged}
+             >
+             <Text style={{ alignItems:'center', color: 'black', fontWeight: 'bold' }}>Update Item</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -603,7 +682,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   addButton: {
-    backgroundColor: '#fffd8d',
+    backgroundColor: 'yellow',
     paddingVertical: 8,
     paddingHorizontal: 6,
     borderRadius: 5,
@@ -611,7 +690,21 @@ const styles = StyleSheet.create({
   addButtonText: {
     color: 'black',
     fontWeight: 'bold',
-    fontSize: 12,
+    fontSize: 14,
+  },
+  addItemButton: {
+    alignItems: 'center',
+    backgroundColor: 'yellow',
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderRadius: 5,
+  },
+  updateItemButton: {
+    alignItems: 'center',
+    backgroundColor: 'yellow',
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderRadius: 5,
   },
   modalContainer: {
     flex: 1,
@@ -639,6 +732,16 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: 'red',
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  icon: {
+    width: 16,
+    height: 16,
+    marginRight: 10,
   },
   modalText: {
     color: 'black',

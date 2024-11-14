@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { View, Image, ImageBackground, TouchableOpacity, StyleSheet, Text, TextInput, Modal, Button } from 'react-native';
 import firebase from 'firebase/compat/app'; // Import Firebase compat SDK
-import 'firebase/compat/auth'; // Import Firebase Authentication
+import 'firebase/compat/firestore'; // Import Firestore service
+import 'firebase/compat/auth'; // Import Auth service
+import 'firebase/compat/storage'; // Import Firebase storage service
 
 const OSA_LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
@@ -49,7 +51,7 @@ const OSA_LoginScreen = ({ navigation }) => {
   };
 
   return (
-    <ImageBackground source={require('./../../assets/login_bg.jpg')} style={styles.background}>
+    <ImageBackground source={require('./../../assets/intro/login_bg.jpg')} style={styles.background}>
       <View style={styles.container}>
         <View style={styles.formContainer}>
           <TextInput
@@ -89,8 +91,9 @@ const OSA_LoginScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
         <View style={styles.footer}>
+          <Image source={require('../../assets/intro/tip_logo.jpg')} style={styles.schoolLogo} resizeMode="contain" />
           <Text style={styles.versionText}>Version 1.0.0</Text>
-          <Image source={require('./../../assets/report_icon.png')} style={styles.reportIcon} resizeMode="contain" />
+          <Image source={require('../../assets/intro/report_icon.png')} style={styles.reportIcon} resizeMode="contain" />
         </View>
       </View>
 
@@ -232,6 +235,10 @@ const styles = StyleSheet.create({
     width: '100%',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
+  },
+  schoolLogo: {
+    width: 50,
+    height: 50,
   },
   versionText: {
     fontSize: 12,

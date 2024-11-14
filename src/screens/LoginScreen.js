@@ -17,9 +17,9 @@ const LoginScreen = ({ navigation }) => {
   };
 
   return (
-    <ImageBackground source={require('./../assets/login_bg.jpg')} style={styles.background}>
+    <ImageBackground source={require('./../assets/intro/login_bg.jpg')} style={styles.background}>
       <View style={styles.container}>
-        <Image source={require('./../assets/logo.png')} style={styles.logo} />
+        <Image source={require('./../assets/intro/logo.png')} style={styles.logo} />
         <View style={styles.buttonsContainer}>
           <TouchableOpacity style={styles.button} onPress={handleStudentLogin}>
             <Text style={styles.buttonText}>Login as Student</Text>
@@ -29,9 +29,9 @@ const LoginScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
         <View style={styles.footer}>
-          <Image source={require('./../assets/tip_logo.jpg')} style={styles.schoolLogo} resizeMode="contain" />
+          <Image source={require('./../assets/intro/tip_logo.jpg')} style={styles.schoolLogo} resizeMode="contain" />
           <Text style={styles.versionText}>Version 1.0.0</Text>
-          <Image source={require('./../assets/report_icon.png')} style={styles.reportIcon} resizeMode="contain" />
+          <Image source={require('./../assets/intro/report_icon.png')} style={styles.reportIcon} resizeMode="contain" />
         </View>
       </View>
     </ImageBackground>

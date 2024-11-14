@@ -12,7 +12,7 @@ const SplashScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-     <Image source={require('../assets/logo.png')} style={styles.logo} />
+     <Image source={require('../assets/intro/logo.png')} style={styles.logo} />
       <Text style={styles.text}>Your App Name</Text>
       <Text style={styles.loadingText}>Loading...</Text>
     </View>

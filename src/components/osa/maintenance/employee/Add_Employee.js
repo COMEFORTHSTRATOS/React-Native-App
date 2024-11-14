@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, Platform, Image, Alert } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import Icon from 'react-native-vector-icons/FontAwesome'; // Import FontAwesome icon library
+import * as ImagePicker from 'react-native-image-picker'; // Import ImagePicker library
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/firestore';
-import 'firebase/compat/auth'; // Import Firebase Authentication module
+import 'firebase/compat/storage';
 
 const Add_Employee = () => {
   const [employeeNo, setEmployeeNo] = useState('');
@@ -17,8 +18,25 @@ const Add_Employee = () => {
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [selectedImage, setSelectedImage] = useState(null);
   const [buttonDisabled, setButtonDisabled] = useState(true); // State to track button disabled status
   const [existingEmployee, setExistingEmployee] = useState(false); // State to track existing employee number
+
+  const handleSelectImage = async () => {
+    const { launchImageLibrary } = ImagePicker;
+    const options = { mediaType: 'photo', quality: 1 };
+
+    launchImageLibrary(options, (response) => {
+      if (response.didCancel) {
+        console.log('User cancelled image selection');
+      } else if (response.error) {
+        console.error('Image picker error:', response.error);
+      } else {
+        const { uri, fileName } = response.assets[0];
+        setSelectedImage({ uri, fileName });
+      }
+    });
+  };
 
   // Effect to enable/disable button based on field completion and existing employee check
   useEffect(() => {
@@ -36,13 +54,15 @@ const Add_Employee = () => {
       username.length <= 30 && // Ensure username length does not exceed 30 characters
       password.trim() !== '' &&
       password.length <= 30 && // Ensure password length does not exceed 30 characters
-      !existingEmployee // Check if employee number already exists
+      selectedImage &&
+      !existingEmployee  // Check if employee number already exists
+ // Check if an image is selected
     ) {
       setButtonDisabled(false);
     } else {
       setButtonDisabled(true);
     }
-  }, [employeeNo, firstName, middleName, lastName, jobPosition, contactNo, email, username, password, existingEmployee]);
+  }, [employeeNo, firstName, middleName, lastName, jobPosition, contactNo, email, username, password, selectedImage, existingEmployee]);
 
   // Function to validate contact number format (numbers, length: 10)
   const validateContactNo = (contact) => {
@@ -75,30 +95,71 @@ const Add_Employee = () => {
     }
   }, [employeeNo]);
 
+  const resetFields = () => {
+    setEmployeeNo('');
+    setFirstName('');
+    setMiddleName('');
+    setLastName('');
+    setSuffix('');
+    setJobPosition('')
+    setContactNo('');
+    setEmail('');
+    setUsername('');
+    setPassword('');
+    setSelectedImage(null);
+  };
+
   const handleAddEmployee = async () => {
     try {
-      // Register the user with email and password
-      const { user } = await firebase.auth().createUserWithEmailAndPassword(email, password);
+      Alert.alert(
+        'Confirmation',
+        'Are you sure you want to add this employee?',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel'
+          },
+          {
+            text: 'OK',
+            onPress: async () => {
+              // Register the user with email and password
+              const { user } = await firebase.auth().createUserWithEmailAndPassword(email, password);
 
-      // Check if user registration is successful
-      if (user) {
-        // Add additional employee details to Firestore
-        const employeeRef = firebase.firestore().collection('osa').doc(user.uid); // Use UID as document ID
-        await employeeRef.set({
-          employeeNo,
-          firstName,
-          middleName,
-          lastName,
-          suffix,
-          jobPosition,
-          contactNo,
-          email,
-          username,
-          // Do not store password in Firestore for security reasons
-        });
+              // Check if user registration is successful
+              if (user) {
+                // Upload profile image to Firebase storage
+                const imageResponse = await fetch(selectedImage.uri);
+                const blob = await imageResponse.blob();
+                const imageRef = firebase.storage().ref().child(`osa-profile-images/${user.uid}`);
+                await imageRef.put(blob);
 
-        alert('Employee added successfully!');
-      }
+                // Get download URL of the uploaded image
+                const imageUrl = await imageRef.getDownloadURL();
+
+                // Add additional employee details including image URL to Firestore
+                const employeeRef = firebase.firestore().collection('osa').doc(user.uid);
+                await employeeRef.set({
+                  employeeNo,
+                  firstName,
+                  middleName,
+                  lastName,
+                  suffix,
+                  jobPosition,
+                  contactNo,
+                  email,
+                  username,
+                  imageUrl, // Add image URL to Firestore
+                  // Do not store password in Firestore for security reasons
+                });
+
+                alert('Employee added successfully!');
+                resetFields(); // Reset fields after successful submission
+              }
+            }
+          }
+        ],
+        { cancelable: false }
+      );
     } catch (error) {
       console.error('Error adding employee:', error);
       alert('Failed to add employee. Please try again.');
@@ -210,6 +271,13 @@ const Add_Employee = () => {
           secureTextEntry={true}
           maxLength={30}
         />
+        {/* Select Image */}
+        <View style={styles.selectImageContainer}>
+           <Text style={styles.label}>Profile Image</Text>
+           <TouchableOpacity style={styles.selectImageButton} onPress={handleSelectImage}>
+              <Text style={styles.selectImageText}>{selectedImage ? selectedImage.fileName : 'Select Image...'}</Text>
+           </TouchableOpacity>
+        </View>
       </View>
       <TouchableOpacity
         style={[styles.button, buttonDisabled && styles.disabledButton]}
@@ -264,6 +332,19 @@ const styles = StyleSheet.create({
   picker: {
     height: Platform.OS === 'ios' ? 200 : 50,
     color: 'black', // Set picker text color
+  },
+  selectImageButton: {
+    backgroundColor: 'yellow',
+    borderRadius: 5,
+
+    alignSelf: 'flex-start', // Align button to the start of the parent container
+    paddingHorizontal: 20, // Add horizontal padding to the button
+    paddingVertical: 10, // Add vertical padding to the button
+  },
+  selectImageText: {
+    color: 'black',
+    fontWeight: 'bold',
+    fontSize: 16,
   },
   button: {
     backgroundColor: 'yellow',
