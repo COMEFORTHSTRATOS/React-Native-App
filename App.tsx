@@ -25,6 +25,7 @@ const App = () => {
       <Stack.Navigator initialRouteName="Splash">
         <Stack.Screen name="Splash" component={SplashScreen} options={{ headerShown: false }} />
         <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="Register" component={RegisterScreen} options={{ headerShown: false }} />  {/* Register Screen */}
 
         <Stack.Screen name="OSA_LoginScreen" component={OSA_LoginScreen} options={{ headerShown: false }} />
         <Stack.Screen name="OSAView" component={OSAAppNavigator} options={{ headerShown: false }} />
